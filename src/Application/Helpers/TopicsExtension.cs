@@ -96,6 +96,8 @@ public static class TopicsExtension
             }
             cleanJson = cleanJson.Trim();
 
+            cleanJson = SanitizeJsonEscapes(cleanJson);
+
             var jsonOptions = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
@@ -108,5 +110,24 @@ public static class TopicsExtension
         {
             throw new InvalidOperationException($"Failed to parse code change suggestions JSON: {ex.Message}. Response was: {jsonResponse}");
         }
+    }
+
+    private static string SanitizeJsonEscapes(string json)
+    {
+        // Fix invalid \u sequences (must be followed by exactly 4 hex digits)
+        // Replace invalid escape sequences like \u followed by non-hex with escaped backslash
+        var result = System.Text.RegularExpressions.Regex.Replace(
+            json,
+            @"\\u(?![0-9a-fA-F]{4})",
+            @"\\u");
+
+        // Fix other common invalid escapes (backslash followed by letters that aren't valid escapes)
+        // Valid JSON escapes: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
+        result = System.Text.RegularExpressions.Regex.Replace(
+            result,
+            @"\\([^""\\\/bfnrtu])",
+            @"\\$1");
+
+        return result;
     }
 }
