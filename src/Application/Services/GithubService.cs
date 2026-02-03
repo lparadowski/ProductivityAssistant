@@ -40,7 +40,8 @@ public class GithubService(ApplicationSettings applicationSettings) : IGithubSer
                         {
                             Username = _githubToken,
                             Password = string.Empty
-                        }
+                        },
+                    CertificateCheck = (cert, valid, host) => true
                 }
             };
             Commands.Pull(repo, signature, pullOptions);
@@ -115,7 +116,8 @@ public class GithubService(ApplicationSettings applicationSettings) : IGithubSer
                     {
                         Username = _githubToken,
                         Password = string.Empty
-                    }
+                    },
+                CertificateCheck = (cert, valid, host) => true
             };
 
             // Push with upstream tracking (equivalent to git push --set-upstream origin branchName)

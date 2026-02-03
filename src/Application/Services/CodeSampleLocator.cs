@@ -127,7 +127,7 @@ public class CodeSampleLocator(ApplicationSettings settings) : ICodeSampleLocato
             var baseDirectory = codebasePath;
             var blacklistedFolders = new[] { ".vs", "bin", "obj", "node_modules", ".git", "packages", "TestResults" };
 
-            var domainPath = Path.Combine(baseDirectory, "src", "Domain");
+            var domainPath = Path.Combine(baseDirectory, "src", "Domain", "Entities");
             if (!Directory.Exists(domainPath))
             {
                 return Array.Empty<string>();
