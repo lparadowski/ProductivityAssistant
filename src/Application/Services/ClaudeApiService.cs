@@ -4,6 +4,7 @@ using Anthropic.SDK.Messaging;
 using Application.Helpers;
 using Application.Interfaces;
 using Application.Model;
+using System.Text.Json;
 
 namespace Application.Services;
 
@@ -12,9 +13,9 @@ public class ClaudeApiService(AnthropicClient anthropicClient) : IClaudeApiServi
     //Could make this configurable if Haiku35 can handle it.
     private string _anthropicModel => AnthropicModels.Claude45Sonnet;
 
-    public async Task<InvestigationTopics> ExtractTopicsAsync(string cardTitle, string cardDescription)
+    public async Task<string[]> DetermineRelevantFilesAsync(string cardTitle, string cardDescription, string[] fileList)
     {
-        var prompt = PromptHelper.BuildTopicExtractionPrompt(cardTitle, cardDescription);
+        var prompt = PromptHelper.BuildFileSelectionPrompt(cardTitle, cardDescription, fileList);
 
         var messages = new List<Message>
         {
@@ -26,7 +27,7 @@ public class ClaudeApiService(AnthropicClient anthropicClient) : IClaudeApiServi
             Messages = messages,
             Model = _anthropicModel,
             MaxTokens = 1000,
-            Temperature = 0.1m // Low temperature for consistent, structured output
+            Temperature = 0.1m
         };
 
         try
@@ -39,12 +40,11 @@ public class ClaudeApiService(AnthropicClient anthropicClient) : IClaudeApiServi
                 content = textContent.Text;
             }
 
-            // Parse the JSON response
-            return TopicsExtension.ParseTopicExtraction(content);
+            return ParseFileSelection(content);
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"Error extracting topics: {ex.Message}", ex);
+            throw new InvalidOperationException($"Error determining relevant files: {ex.Message}", ex);
         }
     }
 
@@ -92,63 +92,6 @@ public class ClaudeApiService(AnthropicClient anthropicClient) : IClaudeApiServi
         }
     }
 
-    public async Task<CodeChangeTopics> ExtractCodeChangeTopicsAsync(string cardTitle, string cardDescription)
-    {
-        var prompt = PromptHelper.BuildCodeChangeTopicExtractionPrompt(cardTitle, cardDescription);
-
-        var messages = new List<Message>
-        {
-            new Message(RoleType.User, prompt)
-        };
-
-        var parameters = new MessageParameters
-        {
-            Messages = messages,
-            Model = _anthropicModel,
-            MaxTokens = 1000,
-            Temperature = 0.1m // Low temperature for consistent, structured output
-        };
-
-        try
-        {
-            var response = await anthropicClient.Messages.GetClaudeMessageAsync(parameters);
-            var content = string.Empty;
-
-            if (response.Content.FirstOrDefault() is TextContent textContent)
-            {
-                content = textContent.Text;
-            }
-
-            // Parse the JSON response
-            return TopicsExtension.ParseCodeChangeTopics(content);
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Error extracting code change topics: {ex.Message}", ex);
-        }
-    }
-
-    private void LogTokenUsage(string operation, MessageResponse response)
-    {
-        if (response.Usage != null)
-        {
-            var inputTokens = response.Usage.InputTokens;
-            var outputTokens = response.Usage.OutputTokens;
-            var totalTokens = inputTokens + outputTokens;
-
-            // Claude 4 Sonnet pricing: ≤200K: $3 input/$15 output, >200K: $6 input/$22.50 output
-            var inputRate = inputTokens <= 200_000 ? 3.0 : 6.0;
-            var outputRate = inputTokens <= 200_000 ? 15.0 : 22.50;
-
-            var inputCost = (inputTokens / 1_000_000.0) * inputRate;
-            var outputCost = (outputTokens / 1_000_000.0) * outputRate;
-            var totalCost = inputCost + outputCost;
-
-            Console.WriteLine($"{operation} - Tokens: {inputTokens:N0} input + {outputTokens:N0} output = {totalTokens:N0} total");
-            Console.WriteLine($"{operation} - Cost: ${inputCost:F4} input + ${outputCost:F4} output = ${totalCost:F4} total");
-        }
-    }
-
     public async Task<FileChange[]> SuggestCodeChangesWithContextAsync(string cardTitle, string cardDescription, CodeSample[] codeSamples)
     {
         var prompt = PromptHelper.BuildCodeChangeSuggestionPrompt(cardTitle, cardDescription, codeSamples);
@@ -192,4 +135,61 @@ public class ClaudeApiService(AnthropicClient anthropicClient) : IClaudeApiServi
             throw new InvalidOperationException($"Error generating code change suggestions: {ex.Message}", ex);
         }
     }
+
+    private static string[] ParseFileSelection(string jsonResponse)
+    {
+        if (string.IsNullOrWhiteSpace(jsonResponse))
+        {
+            return [];
+        }
+
+        try
+        {
+            var cleanJson = jsonResponse.Trim();
+            if (cleanJson.StartsWith("```json"))
+            {
+                cleanJson = cleanJson.Substring(7);
+            }
+            if (cleanJson.EndsWith("```"))
+            {
+                cleanJson = cleanJson.Substring(0, cleanJson.Length - 3);
+            }
+            cleanJson = cleanJson.Trim();
+
+            var jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+
+            var parsed = JsonSerializer.Deserialize<FileSelectionResponse>(cleanJson, jsonOptions);
+            return parsed?.SelectedFiles ?? [];
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Failed to parse file selection JSON: {ex.Message}. Response was: {jsonResponse}");
+        }
+    }
+
+    private void LogTokenUsage(string operation, MessageResponse response)
+    {
+        if (response.Usage != null)
+        {
+            var inputTokens = response.Usage.InputTokens;
+            var outputTokens = response.Usage.OutputTokens;
+            var totalTokens = inputTokens + outputTokens;
+
+            // Claude 4 Sonnet pricing: ≤200K: $3 input/$15 output, >200K: $6 input/$22.50 output
+            var inputRate = inputTokens <= 200_000 ? 3.0 : 6.0;
+            var outputRate = inputTokens <= 200_000 ? 15.0 : 22.50;
+
+            var inputCost = (inputTokens / 1_000_000.0) * inputRate;
+            var outputCost = (outputTokens / 1_000_000.0) * outputRate;
+            var totalCost = inputCost + outputCost;
+
+            Console.WriteLine($"{operation} - Tokens: {inputTokens:N0} input + {outputTokens:N0} output = {totalTokens:N0} total");
+            Console.WriteLine($"{operation} - Cost: ${inputCost:F4} input + ${outputCost:F4} output = ${totalCost:F4} total");
+        }
+    }
+
+    private record FileSelectionResponse(string[] SelectedFiles);
 }

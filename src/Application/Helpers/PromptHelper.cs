@@ -4,23 +4,27 @@ namespace Application.Helpers;
 
 public static class PromptHelper
 {
-    public static string BuildTopicExtractionPrompt(string cardTitle, string cardDescription)
+    public static string BuildFileSelectionPrompt(string cardTitle, string cardDescription, string[] fileList)
     {
-        return $@"Analyze this investigation ticket and extract key information.
+        var fileListText = string.Join("\n", fileList);
 
+        return $@"You are a senior software engineer. Given a ticket and a list of files in a .NET codebase, select the files most relevant to understanding or implementing this ticket.
+
+TICKET:
 Title: {cardTitle}
 Description: {cardDescription}
 
-Extract:
-1. Technologies mentioned or implied (libraries, frameworks, tools)
-2. Actions to be performed (investigate, replace, implement, analyze, etc.)
-3. File patterns to search for relevant code (use wildcards like *.cs, *Mapping*, *Cache*, etc.)
+FILE LIST:
+{fileListText}
+
+Select up to 20 files that are most relevant to this ticket. Consider:
+- Files whose names match entities, services, or concepts mentioned in the ticket
+- Files across architectural layers (Domain, Application, API, Infrastructure) that relate to the ticket
+- Configuration or DI registration files if the ticket involves setup or wiring
 
 Return ONLY valid JSON in this exact format:
 {{
-  ""technologies"": [""AutoMapper"", ""Redis""],
-  ""actions"": [""investigate"", ""replace""],
-  ""filePatterns"": [""*Mapping*.cs"", ""*Cache*.cs"", ""*.config""]
+  ""selectedFiles"": [""src/Domain/Invoice.cs"", ""src/Application/Services/InvoiceService.cs""]
 }}
 
 Do not include any text before or after the JSON.";
@@ -63,42 +67,11 @@ INVESTIGATION REQUIREMENTS:
 5. Include recommendations when applicable
 6. Consider licensing, cost implications (time/resources), and technical debt
 7. Structure your response with clear sections: Findings, Recommendations, Risk Assessment
-8. Keep your response under 8000 tokens to ensure complete delivery
+8. Keep your response under 16000 characters (hard Trello limit) to ensure complete delivery. Aim for concise, actionable content
 
 Please conduct a thorough investigation of this ticket using the provided code context.";
 
         return prompt;
-    }
-
-    public static string BuildCodeChangeTopicExtractionPrompt(string cardTitle, string cardDescription)
-    {
-        return $@"Analyze this code change ticket and extract key information for implementing the change.
-
-Title: {cardTitle}
-Description: {cardDescription}
-
-Extract:
-1. Domain entities (objects/models like Invoice, Customer, Product, etc.)
-2. Operations (CRUD actions: Create, Read, Update, Delete, Add, Remove, etc.)
-3. Architectural layers needed (API, Service, Repository, Domain, etc.)
-4. Specific file patterns for the entities (use entity names: *Invoice*.cs, *Customer*.cs)
-5. Configuration/infrastructure patterns if the ticket mentions:
-   - DI registration, dependency injection, service registration → include ""*ServiceCollectionExtensions*.cs"", ""Startup.cs"", ""Program.cs""
-   - Configuration, settings, appsettings → include ""*Settings*.cs"", ""appsettings*.json""
-   - Database migrations, schema → include ""*Migration*.cs"", ""*DbContext*.cs""
-
-Return ONLY valid JSON in this exact format:
-{{
-  ""entities"": [""Invoice"", ""Customer""],
-  ""operations"": [""delete"", ""create""],
-  ""layers"": [""API"", ""Service"", ""Repository"", ""Domain""],
-  ""filePatterns"": [""*Invoice*.cs"", ""*Customer*.cs"", ""*ServiceCollectionExtensions*.cs""]
-}}
-
-IMPORTANT:
-- Include infrastructure patterns in filePatterns when the ticket explicitly mentions DI, configuration, or database changes
-- Focus on specific entities and targeted file patterns, not generic patterns
-Do not include any text before or after the JSON.";
     }
 
     public static string BuildCodeChangeSuggestionPrompt(string cardTitle, string cardDescription, CodeSample[] codeSamples)

@@ -6,13 +6,15 @@ public class InvestigationService(IClaudeApiService claudeApiService, ICodeSampl
 {
     public async Task<string> InvestigateAsync(string cardTitle, string cardDescription, string codebasePath)
     {
-        //1. Analyse the card title and description to identify key topics and themes.
-        var topics = await claudeApiService.ExtractCodeChangeTopicsAsync(cardTitle, cardDescription);
+        //1. Get the filtered file list from the codebase.
+        var fileList = await codeSampleLocator.GetFilteredFileListAsync(codebasePath);
 
-        //2. Search the repository for relevant files, code snippets, or documentation related to the identified topics.
-        var codeSamples = await codeSampleLocator.FindRelevantCodeAsync(topics, codebasePath);
+        //2. Ask Claude to determine which files are relevant to the ticket.
+        var relevantFiles = await claudeApiService.DetermineRelevantFilesAsync(cardTitle, cardDescription, fileList);
 
-        //3. Create a prompt for Claude that includes the code samples to investigate the ticket based on the card title and description.
+        //3. Retrieve the content of the relevant files.
+        var codeSamples = await codeSampleLocator.GetCodeSamplesForFilesAsync(relevantFiles, codebasePath);
+
         //4. Send to Claude API for investigation.
         return await claudeApiService.InvestigateWithContextAsync(cardTitle, cardDescription, codeSamples);
     }

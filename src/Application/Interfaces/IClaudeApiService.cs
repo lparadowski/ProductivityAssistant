@@ -4,9 +4,7 @@ namespace Application.Interfaces;
 
 public interface IClaudeApiService
 {
-    Task<InvestigationTopics> ExtractTopicsAsync(string cardTitle, string cardDescription);
-
-    Task<CodeChangeTopics> ExtractCodeChangeTopicsAsync(string cardTitle, string cardDescription);
+    Task<string[]> DetermineRelevantFilesAsync(string cardTitle, string cardDescription, string[] fileList);
 
     Task<string> InvestigateWithContextAsync(string cardTitle, string cardDescription, CodeSample[] codeSamples);
 

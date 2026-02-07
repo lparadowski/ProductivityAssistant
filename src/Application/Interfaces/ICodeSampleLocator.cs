@@ -4,7 +4,7 @@ namespace Application.Interfaces;
 
 public interface ICodeSampleLocator
 {
-    Task<CodeSample[]> FindRelevantCodeAsync(InvestigationTopics topics, string codebasePath);
+    Task<string[]> GetFilteredFileListAsync(string codebasePath);
 
-    Task<CodeSample[]> FindRelevantCodeAsync(CodeChangeTopics topics, string codebasePath);
+    Task<CodeSample[]> GetCodeSamplesForFilesAsync(string[] filePaths, string codebasePath);
 }
