@@ -61,6 +61,8 @@ public class TrelloService(ApplicationSettings applicationSettings) : ITrelloSer
         }
     }
 
+    private const int TrelloMaxCommentLength = 16384;
+
     public async Task PostCommentAsync(string cardId, string comment)
     {
         TrelloAuthorization.Default.AppKey = applicationSettings.TrelloApiKey;
@@ -71,7 +73,11 @@ public class TrelloService(ApplicationSettings applicationSettings) : ITrelloSer
             var card = new Card(cardId);
             await card.Refresh();
 
-            await card.Comments.Add(comment);
+            var chunks = SplitComment(comment);
+            foreach (var chunk in chunks)
+            {
+                await card.Comments.Add(chunk);
+            }
         }
         catch (Exception ex)
         {
@@ -121,4 +127,45 @@ public class TrelloService(ApplicationSettings applicationSettings) : ITrelloSer
         }
     }
 
+    private static List<string> SplitComment(string comment)
+    {
+        if (comment.Length <= TrelloMaxCommentLength)
+        {
+            return [comment];
+        }
+
+        var chunks = new List<string>();
+        var remaining = comment;
+        var part = 1;
+
+        while (remaining.Length > 0)
+        {
+            var isLast = remaining.Length <= TrelloMaxCommentLength;
+
+            if (!isLast)
+            {
+                var footer = $"\n\n---\n*(continued in next comment — part {part})*";
+                var maxLength = TrelloMaxCommentLength - footer.Length;
+
+                // Try to split at the last newline within the limit for cleaner breaks
+                var splitIndex = remaining.LastIndexOf('\n', maxLength);
+                if (splitIndex < maxLength / 2)
+                {
+                    splitIndex = maxLength;
+                }
+
+                chunks.Add(remaining[..splitIndex] + footer);
+                remaining = remaining[splitIndex..].TrimStart('\n');
+            }
+            else
+            {
+                chunks.Add(remaining);
+                remaining = string.Empty;
+            }
+
+            part++;
+        }
+
+        return chunks;
+    }
 }

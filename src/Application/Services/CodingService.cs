@@ -10,9 +10,9 @@ public class CodingService(IGithubService githubService, IClaudeApiService claud
         await githubService.PullLatestDevelopAsync(codebasePath);
         var branchName = await githubService.CreateBranchAsync(title, codebasePath);
 
-        var topics = await claudeApiService.ExtractCodeChangeTopicsAsync(title, description);
-
-        var codeSamples = await codeSampleLocator.FindRelevantCodeAsync(topics, codebasePath);
+        var fileList = await codeSampleLocator.GetFilteredFileListAsync(codebasePath);
+        var relevantFiles = await claudeApiService.DetermineRelevantFilesAsync(title, description, fileList);
+        var codeSamples = await codeSampleLocator.GetCodeSamplesForFilesAsync(relevantFiles, codebasePath);
 
         var suggestedChanges = await claudeApiService.SuggestCodeChangesWithContextAsync(title, description, codeSamples);
 
